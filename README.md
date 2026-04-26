@@ -1,54 +1,52 @@
-# 🛡️ Aegis Stack
+# Conftest
 
-**Production-grade Kubernetes security platform** for zero-trust, policy-driven, continuously monitored EKS clusters.
+[![Go Report Card](https://goreportcard.com/badge/open-policy-agent/opa)](https://goreportcard.com/report/open-policy-agent/conftest) [![Netlify](https://api.netlify.com/api/v1/badges/2d928746-3380-4123-b0eb-1fd74ba390db/deploy-status)](https://app.netlify.com/sites/vibrant-villani-65041c/deploys)
 
-## What's Inside
+Conftest helps you write tests against structured configuration data. Using Conftest you can
+write tests for your Kubernetes configuration, Tekton pipeline definitions, Terraform code,
+Serverless configs or any other config files.
 
-| Layer | Tools |
-|---|---|
-| Infrastructure | Terraform + EKS + VPC |
-| Policy Enforcement | OPA Gatekeeper + Kyverno |
-| Runtime Security | Falco + Falcosidekick |
-| Secret Management | HashiCorp Vault |
-| Service Mesh | Istio (mTLS, AuthorizationPolicies) |
-| CI/CD | Tekton Pipelines (Trivy + Syft + Cosign + Conftest) |
-| Observability | Prometheus + Grafana + Loki |
-| GitOps | ArgoCD |
-| Certificates | cert-manager (Let's Encrypt) |
+Conftest uses the Rego language from [Open Policy Agent](https://www.openpolicyagent.org/) for writing
+the assertions. You can read more about Rego in [How do I write policies](https://www.openpolicyagent.org/docs/how-do-i-write-policies.html)
+in the Open Policy Agent documentation.
 
-## Quick Start
+Here's a quick example. Save the following as `policy/deployment.rego`:
 
-```bash
-# 1. Bootstrap infrastructure
-cp infrastructure/terraform.tfvars.example infrastructure/terraform.tfvars
-# Edit terraform.tfvars with your values
-make infra-init
-make infra-apply
+```rego
+package main
 
-# 2. Bootstrap cluster
-make cluster-bootstrap
+deny[msg] {
+  input.kind == "Deployment"
+  not input.spec.template.spec.securityContext.runAsNonRoot
 
-# 3. Deploy security stack
-make security-deploy
+  msg := "Containers must not run as root"
+}
 
-# 4. Verify
-make verify
+deny[msg] {
+  input.kind == "Deployment"
+  not input.spec.selector.matchLabels.app
+
+  msg := "Containers must provide app label for pod selectors"
+}
 ```
 
-## Architecture
+Assuming you have a Kubernetes deployment in `deployment.yaml` you can run Conftest like so:
 
-See [docs/architecture.md](docs/architecture.md) for the full system design.
+```console
+$ conftest test deployment.yaml
+FAIL - deployment.yaml - Containers must not run as root
+FAIL - deployment.yaml - Containers must provide app label for pod selectors
 
-## Security Posture
+2 tests, 0 passed, 0 warnings, 2 failures, 0 exceptions
+```
 
-- **No privileged containers** enforced by Gatekeeper + Kyverno
-- **No `latest` image tags** — all images must be pinned and signed (Cosign)
-- **mTLS everywhere** via Istio service mesh
-- **Secrets** never in Git — Vault + Kubernetes Auth
-- **Runtime anomaly detection** via Falco with automated pod quarantine
-- **SBOM generation** on every build (Syft), verified on schedule
-- **Trivy scanning** in CI — critical/high CVEs block the pipeline
+Conftest isn't specific to Kubernetes. It will happily let you write tests for any configuration files in a variety of different formats. See the [documentation](https://www.conftest.dev/) for [installation instructions](https://www.conftest.dev/install/) and
+more details about the features.
 
-## License
+## Want to contribute to Conftest?
 
-MIT
+* See [DEVELOPMENT.md](DEVELOPMENT.md) to build and test Conftest itself.
+* See [CONTRIBUTING.md](CONTRIBUTING.md) to get started.
+
+For discussions and questions join us on the [Open Policy Agent Slack](https://slack.openpolicyagent.org/)
+in the `#opa-conftest` channel.

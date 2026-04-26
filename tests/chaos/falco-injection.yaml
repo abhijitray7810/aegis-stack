@@ -1,0 +1,34 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: falco-chaos-shell-inject
+  namespace: secure-apps
+  labels:
+    app: falco-chaos
+    purpose: security-test
+spec:
+  ttlSecondsAfterFinished: 120
+  template:
+    metadata:
+      labels:
+        app: falco-chaos
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: shell-injector
+          image: alpine:3.18.5
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              echo "=== Falco chaos: spawning shell — watch for alert ==="
+              /bin/sh -c "echo 'chaos-test' && sleep 2"
+              echo "=== Done. Check: kubectl logs -n falco -l app=falco -f ==="
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            limits: { cpu: 50m, memory: 32Mi }

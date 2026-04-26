@@ -1,0 +1,43 @@
+---
+# Apply with: kubectl exec -n vault vault-0 -- vault write auth/kubernetes/config ...
+# This YAML is used by the Makefile vault-configure target as reference config.
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vault-kubernetes-auth-config
+  namespace: vault
+data:
+  configure.sh: |
+    #!/bin/sh
+    set -e
+
+    KUBE_HOST=$(kubectl config view --raw --minify --flatten \
+      -o jsonpath='{.clusters[].cluster.server}')
+    SA_JWT=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+    KUBE_CA=$(cat /var/run/secrets/kubernetes.io/serviceaccount/ca.crt | base64 | tr -d '\n')
+
+    # Enable and configure Kubernetes auth
+    vault auth enable kubernetes || true
+
+    vault write auth/kubernetes/config \
+      kubernetes_host="$KUBE_HOST" \
+      kubernetes_ca_cert="$KUBE_CA" \
+      token_reviewer_jwt="$SA_JWT" \
+      issuer="https://kubernetes.default.svc.cluster.local"
+
+    # Create role for secure-apps namespace
+    vault write auth/kubernetes/role/secure-apps \
+      bound_service_account_names="secure-api,sbom-verifier" \
+      bound_service_account_namespaces="secure-apps" \
+      policies="aegis-policy" \
+      ttl="1h"
+
+    # Create role for monitoring
+    vault write auth/kubernetes/role/monitoring \
+      bound_service_account_names="prometheus,grafana" \
+      bound_service_account_namespaces="monitoring" \
+      policies="aegis-policy" \
+      ttl="1h"
+
+    echo "Vault Kubernetes auth configured."

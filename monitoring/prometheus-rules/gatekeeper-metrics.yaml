@@ -1,0 +1,56 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: gatekeeper-metrics
+  namespace: monitoring
+  labels:
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    - name: gatekeeper.violations
+      interval: 60s
+      rules:
+        - alert: GatekeeperViolationDetected
+          expr: gatekeeper_violations > 0
+          for: 5m
+          labels:
+            severity: warning
+            team: security
+          annotations:
+            summary: "OPA Gatekeeper policy violation: {{ $labels.constraint_kind }}"
+            description: "{{ $value }} violation(s) of constraint '{{ $labels.constraint_name }}' in namespace '{{ $labels.namespace }}'."
+            runbook_url: "https://github.com/your-org/aegis-stack/blob/main/docs/runbooks/policy-violation.md"
+
+        - alert: GatekeeperAuditError
+          expr: gatekeeper_audit_last_run_time < (time() - 600)
+          for: 5m
+          labels:
+            severity: warning
+            team: security
+          annotations:
+            summary: "Gatekeeper audit has not run in 10+ minutes"
+            description: "Last Gatekeeper audit was more than 10 minutes ago — check controller health."
+
+        - alert: GatekeeperWebhookLatencyHigh
+          expr: histogram_quantile(0.99, rate(gatekeeper_validation_request_duration_seconds_bucket[5m])) > 1
+          for: 5m
+          labels:
+            severity: warning
+            team: platform
+          annotations:
+            summary: "Gatekeeper webhook p99 latency > 1s"
+            description: "High admission webhook latency may impact pod scheduling. Current p99: {{ $value | printf \"%.2f\" }}s."
+
+    - name: kyverno.policies
+      interval: 60s
+      rules:
+        - alert: KyvernoPolicyFailure
+          expr: increase(kyverno_policy_results_total{rule_result="fail"}[10m]) > 0
+          for: 0m
+          labels:
+            severity: warning
+            team: security
+          annotations:
+            summary: "Kyverno policy '{{ $labels.policy_name }}' blocked a request"
+            description: "Rule '{{ $labels.rule_name }}' failed for resource '{{ $labels.resource_name }}' in '{{ $labels.namespace_name }}'."

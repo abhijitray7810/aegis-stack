@@ -1,0 +1,10 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: gatekeeper-system
+
+resources:
+  - https://raw.githubusercontent.com/open-policy-agent/gatekeeper/v3.14.0/deploy/gatekeeper.yaml
+  - constraint-templates/disallowed-tags.yaml
+  - constraint-templates/require-labels.yaml
+  - constraint-templates/k8s-privileged-container.yaml

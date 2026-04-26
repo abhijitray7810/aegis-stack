@@ -1,0 +1,38 @@
+listenport: 2801
+debug: false
+
+customfields:
+  cluster: aegis-production
+  environment: production
+
+minimumpriority: "warning"
+
+slack:
+  webhookurl: ""   # set via Secret/env: SLACK_WEBHOOKURL
+  channel: "#security-alerts"
+  footer: "Aegis Stack — Falco"
+  icon: "https://falco.org/img/favicon.png"
+  minimumpriority: "warning"
+  messageformat: |
+    *[{{.Priority}}] {{.Rule}}*
+    ```{{.Output}}```
+    *Time:* {{.Time}}  *Tags:* {{range .Tags}}{{.}} {{end}}
+
+alertmanager:
+  hostport: "http://kube-prometheus-stack-alertmanager.monitoring.svc.cluster.local:9093"
+  minimumpriority: "error"
+  endpoint: "/api/v2/alerts"
+
+loki:
+  hostport: "http://loki-stack.monitoring.svc.cluster.local:3100"
+  minimumpriority: "warning"
+  tenant: ""
+
+prometheus:
+  extralabels: "cluster=aegis-production,environment=production"
+
+# Automated remediation webhook (calls quarantine-pod script)
+webhook:
+  address: "http://falco-remediation.falco.svc.cluster.local:8080/event"
+  minimumpriority: "critical"
+  checkcert: true

@@ -1,0 +1,110 @@
+{
+  "title": "Aegis — Falco Security Events",
+  "uid": "aegis-falco",
+  "schemaVersion": 36,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-3h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "namespace",
+        "type": "query",
+        "datasource": "Prometheus",
+        "query": "label_values(falco_events_total, namespace)",
+        "refresh": 2
+      },
+      {
+        "name": "priority",
+        "type": "custom",
+        "options": [
+          {"text": "All",      "value": ".*"},
+          {"text": "CRITICAL", "value": "CRITICAL"},
+          {"text": "ERROR",    "value": "ERROR"},
+          {"text": "WARNING",  "value": "WARNING"}
+        ]
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Critical Events (last 1h)",
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "sum(increase(falco_events_total{priority=\"CRITICAL\"}[1h]))",
+          "legendFormat": "Critical"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "red",    "value": 5 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Falco Events by Priority",
+      "gridPos": { "x": 0, "y": 4, "w": 24, "h": 8 },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "sum by (priority) (rate(falco_events_total[5m]))",
+          "legendFormat": "{{priority}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "table",
+      "title": "Top Triggered Rules",
+      "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "topk(10, sum by (rule) (increase(falco_events_total[1h])))",
+          "legendFormat": "{{rule}}",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "table",
+      "title": "Events by Namespace",
+      "gridPos": { "x": 12, "y": 12, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "sum by (namespace) (increase(falco_events_total[1h]))",
+          "legendFormat": "{{namespace}}",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "logs",
+      "title": "Recent Falco Alerts (Loki)",
+      "gridPos": { "x": 0, "y": 20, "w": 24, "h": 10 },
+      "targets": [
+        {
+          "datasource": "Loki",
+          "expr": "{app=\"falco\"} | json | priority=~\"$priority\" | namespace=~\"$namespace\"",
+          "legendFormat": ""
+        }
+      ]
+    }
+  ]
+}

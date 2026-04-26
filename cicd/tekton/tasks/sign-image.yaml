@@ -1,0 +1,47 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: sign-image
+  namespace: tekton-pipelines
+  labels:
+    app.kubernetes.io/part-of: aegis-cicd
+spec:
+  description: >
+    Signs a container image using Cosign keyless signing via OIDC.
+    The signature is pushed as an OCI artifact to the same registry.
+  params:
+    - name: IMAGE
+      type: string
+      description: "Full image reference including digest (image@sha256:...)"
+    - name: COSIGN_REPOSITORY
+      type: string
+      default: ""
+      description: "Override registry for signature storage"
+  steps:
+    - name: sign
+      image: gcr.io/projectsigstore/cosign:v2.2.2
+      env:
+        - name: COSIGN_EXPERIMENTAL
+          value: "1"
+        - name: COSIGN_REPOSITORY
+          value: "$(params.COSIGN_REPOSITORY)"
+      script: |
+        #!/bin/sh
+        set -e
+        echo "Signing image: $(params.IMAGE)"
+        cosign sign --yes "$(params.IMAGE)"
+        echo "Image signed successfully."
+
+    - name: verify
+      image: gcr.io/projectsigstore/cosign:v2.2.2
+      env:
+        - name: COSIGN_EXPERIMENTAL
+          value: "1"
+      script: |
+        #!/bin/sh
+        set -e
+        cosign verify \
+          --certificate-identity-regexp="https://github.com/.*/.github/workflows/.*" \
+          --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
+          "$(params.IMAGE)"
+        echo "Signature verified."

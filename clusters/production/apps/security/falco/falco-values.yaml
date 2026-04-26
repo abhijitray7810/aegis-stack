@@ -1,0 +1,47 @@
+image:
+  tag: "0.37.1"
+
+driver:
+  kind: ebpf   # prefer eBPF over kernel module for modern kernels
+
+falco:
+  grpc:
+    enabled: true
+    bind_address: "0.0.0.0:5060"
+    threadiness: 8
+  grpc_output:
+    enabled: true
+  json_output: true
+  json_include_output_property: true
+  log_level: info
+  priority: warning   # only warning and above sent to outputs
+
+  # Load custom rules
+  rules_file:
+    - /etc/falco/falco_rules.yaml
+    - /etc/falco/falco_rules.local.yaml
+    - /etc/falco/k8s_audit_rules.yaml
+    - /etc/falco/custom_rules/aegis-rules.yaml
+
+customRules:
+  aegis-rules.yaml: |
+    # Loaded from falco/falco-rules.custom.yaml via ConfigMap — see falco-config.yaml
+
+falcosidekick:
+  enabled: true
+  webui:
+    enabled: true
+
+tolerations:
+  - key: node-role.kubernetes.io/master
+    effect: NoSchedule
+  - key: node-role.kubernetes.io/control-plane
+    effect: NoSchedule
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 512Mi
+  limits:
+    cpu: 500m
+    memory: 1024Mi

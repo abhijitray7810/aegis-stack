@@ -1,0 +1,76 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: falco-alerts
+  namespace: monitoring
+  labels:
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    - name: falco.critical
+      interval: 30s
+      rules:
+        - alert: FalcoCriticalEventFired
+          expr: increase(falco_events_total{priority="CRITICAL"}[5m]) > 0
+          for: 0m
+          labels:
+            severity: critical
+            team: security
+          annotations:
+            summary: "Falco CRITICAL rule fired in {{ $labels.namespace }}"
+            description: "Rule '{{ $labels.rule }}' triggered {{ $value }} time(s) in the last 5 minutes."
+            runbook_url: "https://github.com/your-org/aegis-stack/blob/main/docs/runbooks/falco-critical.md"
+
+        - alert: FalcoShellSpawnedInContainer
+          expr: increase(falco_events_total{rule="Aegis — Shell Spawned in Container"}[5m]) > 0
+          for: 0m
+          labels:
+            severity: critical
+            team: security
+          annotations:
+            summary: "Shell spawned inside container in {{ $labels.namespace }}"
+            description: "Possible RCE — a shell process was detected inside a container."
+
+        - alert: FalcoPrivilegedContainerStarted
+          expr: increase(falco_events_total{rule="Aegis — Privileged Container Started"}[5m]) > 0
+          for: 0m
+          labels:
+            severity: critical
+            team: security
+          annotations:
+            summary: "Privileged container started in {{ $labels.namespace }}"
+            description: "Container escape risk — privileged container detected."
+
+        - alert: FalcoCryptoMinerDetected
+          expr: increase(falco_events_total{rule="Aegis — Crypto Miner Detected"}[5m]) > 0
+          for: 0m
+          labels:
+            severity: critical
+            team: security
+          annotations:
+            summary: "Crypto miner detected in {{ $labels.namespace }}"
+            description: "Crypto-mining process detected in container '{{ $labels.container }}'."
+
+    - name: falco.warning
+      interval: 60s
+      rules:
+        - alert: FalcoHighEventRate
+          expr: sum(rate(falco_events_total[5m])) > 10
+          for: 5m
+          labels:
+            severity: warning
+            team: security
+          annotations:
+            summary: "Elevated Falco event rate ({{ $value | printf \"%.1f\" }}/s)"
+            description: "More than 10 security events/second — possible attack or misconfiguration."
+
+        - alert: FalcoDroppedSyscalls
+          expr: falco_n_evts_cpu_drop_total > 100
+          for: 2m
+          labels:
+            severity: warning
+            team: security
+          annotations:
+            summary: "Falco dropping syscall events on CPU {{ $labels.cpu }}"
+            description: "Falco is losing visibility — consider tuning buffer sizes."

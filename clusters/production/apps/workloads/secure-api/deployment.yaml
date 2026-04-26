@@ -1,0 +1,98 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: secure-api
+  namespace: secure-apps
+  labels:
+    app: secure-api
+    version: "1.0.0"
+    environment: production
+    owner: platform-security
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: secure-api
+  template:
+    metadata:
+      labels:
+        app: secure-api
+        version: "1.0.0"
+        environment: production
+        owner: platform-security
+      annotations:
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/role: "secure-apps"
+        vault.hashicorp.com/agent-inject-secret-config: "secret/data/aegis/secure-api/config"
+        vault.hashicorp.com/agent-inject-template-config: |
+          {{- with secret "secret/data/aegis/secure-api/config" -}}
+          export DB_HOST="{{ .Data.data.db_host }}"
+          export DB_PORT="{{ .Data.data.db_port }}"
+          {{- end }}
+    spec:
+      serviceAccountName: secure-api
+      automountServiceAccountToken: false
+
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+
+      containers:
+        - name: secure-api
+          image: "123456789.dkr.ecr.us-east-1.amazonaws.com/secure-api@sha256:placeholder"
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits:   { cpu: 500m, memory: 256Mi }
+          readinessProbe:
+            httpGet: { path: /healthz, port: 8080 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: 8080 }
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: cache
+              mountPath: /app/cache
+          env:
+            - name: ENV
+              value: production
+            - name: PORT
+              value: "8080"
+
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: cache
+          emptyDir: {}
+
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: secure-api
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: secure-api
+  namespace: secure-apps
+  annotations:
+    eks.amazonaws.com/role-arn: ""  # set if IRSA needed

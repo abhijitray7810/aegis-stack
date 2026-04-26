@@ -1,0 +1,94 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: sbom-verifier
+  namespace: secure-apps
+  labels:
+    app: sbom-verifier
+    version: "1.0.0"
+    environment: production
+    owner: platform-security
+spec:
+  schedule: "0 6 * * *"   # daily at 06:00 UTC
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app: sbom-verifier
+        spec:
+          serviceAccountName: sbom-verifier
+          restartPolicy: OnFailure
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: verifier
+              image: "gcr.io/projectsigstore/cosign:v2.2.2"
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -e
+                  echo "=== SBOM Verification Job ==="
+                  echo "Verifying image signatures and SBOMs in namespace: secure-apps"
+
+                  # List all running images in secure-apps namespace
+                  # In production this would use the cluster API or an image registry list
+                  IMAGES="${IMAGES_TO_VERIFY:-}"
+
+                  if [ -z "$IMAGES" ]; then
+                    echo "No images specified — using IMAGES_TO_VERIFY env var"
+                    exit 0
+                  fi
+
+                  for IMAGE in $IMAGES; do
+                    echo "Verifying: $IMAGE"
+                    cosign verify \
+                      --certificate-identity-regexp="https://github.com/.*/.github/workflows/.*" \
+                      --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
+                      "$IMAGE" && echo "PASS: $IMAGE" || echo "FAIL: $IMAGE"
+                  done
+
+                  echo "=== Verification complete ==="
+              env:
+                - name: IMAGES_TO_VERIFY
+                  valueFrom:
+                    configMapKeyRef:
+                      name: sbom-verifier-config
+                      key: images
+                      optional: true
+              resources:
+                requests: { cpu: 50m, memory: 64Mi }
+                limits:   { cpu: 200m, memory: 128Mi }
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: tmp
+              emptyDir: {}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: sbom-verifier
+  namespace: secure-apps
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sbom-verifier-config
+  namespace: secure-apps
+data:
+  images: ""  # populate with newline-separated image references

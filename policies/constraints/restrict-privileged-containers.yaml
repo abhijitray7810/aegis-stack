@@ -1,0 +1,29 @@
+# OPA/Conftest policy — deny privileged containers in Terraform-managed resources
+# Used in CI via: conftest test clusters/ --policy policies/
+package main
+
+import future.keywords.in
+
+deny[msg] {
+  input.kind == "Pod"
+  container := input.spec.containers[_]
+  container.securityContext.privileged == true
+  not is_exempt_namespace(input.metadata.namespace)
+  msg := sprintf(
+    "Pod '%s/%s': container '%s' must not run as privileged",
+    [input.metadata.namespace, input.metadata.name, container.name]
+  )
+}
+
+deny[msg] {
+  input.kind in {"Deployment", "StatefulSet", "DaemonSet"}
+  container := input.spec.template.spec.containers[_]
+  container.securityContext.allowPrivilegeEscalation == true
+  not is_exempt_namespace(input.metadata.namespace)
+  msg := sprintf(
+    "%s '%s/%s': container '%s' must set allowPrivilegeEscalation=false",
+    [input.kind, input.metadata.namespace, input.metadata.name, container.name]
+  )
+}
+
+is_exempt_namespace(ns) { ns in {"kube-system", "falco", "gatekeeper-system", "kyverno"} }

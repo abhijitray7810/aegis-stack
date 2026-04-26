@@ -1,0 +1,14 @@
+package main
+
+import future.keywords.in
+
+deny[msg] {
+  input.kind == "Pod"
+  input.metadata.namespace == "secure-apps"
+  container := input.spec.containers[_]
+  not container.securityContext.readOnlyRootFilesystem == true
+  msg := sprintf(
+    "Pod '%s': container '%s' in secure-apps must set readOnlyRootFilesystem=true",
+    [input.metadata.name, container.name]
+  )
+}

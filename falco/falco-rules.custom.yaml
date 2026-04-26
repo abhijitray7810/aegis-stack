@@ -1,0 +1,153 @@
+# ============================================================
+# Aegis Stack — Falco Custom Rules
+# ============================================================
+
+# ── Macros ────────────────────────────────────────────────────────────────────
+- macro: aegis_trusted_images
+  condition: >
+    (container.image.repository in (
+      "602401143452.dkr.ecr.us-east-1.amazonaws.com/eks",
+      "public.ecr.aws/eks-distro",
+      "602401143452.dkr.ecr.us-east-1.amazonaws.com/amazon-k8s-cni"
+    ))
+
+- macro: aegis_privileged_spawn
+  condition: >
+    spawned_process and container and
+    not container.image.repository = "" and
+    not aegis_trusted_images
+
+# ── Lists ─────────────────────────────────────────────────────────────────────
+- list: aegis_shell_binaries
+  items: [bash, sh, dash, zsh, ksh, tcsh, fish]
+
+- list: aegis_sensitive_directories
+  items:
+    - /etc/shadow
+    - /etc/passwd
+    - /etc/sudoers
+    - /root/.ssh
+    - /proc/*/mem
+    - /var/run/docker.sock
+
+# ── Rules ─────────────────────────────────────────────────────────────────────
+
+- rule: Aegis — Shell Spawned in Container
+  desc: >
+    A shell was spawned inside a container. This is unusual in production
+    and may indicate an attacker with RCE capability.
+  condition: >
+    spawned_process and container and
+    proc.name in (aegis_shell_binaries) and
+    not proc.pname in (aegis_shell_binaries) and
+    not container.image.repository startswith "debug-"
+  output: >
+    Shell spawned in container
+    (user=%user.name container=%container.name image=%container.image.repository:%container.image.tag
+     shell=%proc.name parent=%proc.pname cmdline=%proc.cmdline)
+  priority: CRITICAL
+  tags: [aegis, shell, container, mitre_execution]
+
+- rule: Aegis — Write to Sensitive File
+  desc: >
+    A process attempted to write to a sensitive system file inside a container.
+  condition: >
+    open_write and container and
+    fd.name in (aegis_sensitive_directories) and
+    not proc.name = "passwd"
+  output: >
+    Sensitive file write in container
+    (user=%user.name container=%container.name file=%fd.name
+     image=%container.image.repository:%container.image.tag proc=%proc.name)
+  priority: CRITICAL
+  tags: [aegis, file-write, mitre_credential_access]
+
+- rule: Aegis — Unexpected Outbound Network Connection
+  desc: >
+    A container initiated an outbound connection to an unexpected port.
+    Workloads should only connect to known service ports.
+  condition: >
+    outbound and container and
+    not fd.sport in (443, 8443, 9090, 9091, 15010, 15012, 15014) and
+    not aegis_trusted_images and
+    fd.sip != "127.0.0.1"
+  output: >
+    Unexpected outbound connection from container
+    (user=%user.name container=%container.name image=%container.image.repository:%container.image.tag
+     connection=%fd.name)
+  priority: WARNING
+  tags: [aegis, network, mitre_exfiltration]
+
+- rule: Aegis — Container Running as Root
+  desc: >
+    A container process is running as root (uid=0). All production
+    containers must use non-root users.
+  condition: >
+    spawned_process and container and
+    user.uid = 0 and
+    not aegis_trusted_images and
+    not proc.name in (pause, runc)
+  output: >
+    Container running as root
+    (container=%container.name image=%container.image.repository:%container.image.tag
+     user=%user.name proc=%proc.name)
+  priority: ERROR
+  tags: [aegis, privilege, mitre_privilege_escalation]
+
+- rule: Aegis — Kubernetes Secret Accessed via API
+  desc: >
+    A service account accessed Kubernetes Secrets via the API.
+    Normal workloads should use Vault; direct Secret reads are suspicious.
+  condition: >
+    k8s_audit and
+    ka.verb in (get, list, watch) and
+    ka.target.resource = "secrets" and
+    ka.user.name != "system:serviceaccount:vault:vault" and
+    not ka.user.name startswith "system:node:"
+  output: >
+    Kubernetes Secret accessed via API
+    (user=%ka.user.name ns=%ka.target.namespace resource=%ka.target.name)
+  priority: WARNING
+  tags: [aegis, k8s-audit, secrets, mitre_credential_access]
+
+- rule: Aegis — Privileged Container Started
+  desc: A privileged container was created — this bypasses all security boundaries.
+  condition: >
+    container_started and container and
+    container.privileged = true and
+    not aegis_trusted_images
+  output: >
+    Privileged container started
+    (container=%container.name image=%container.image.repository:%container.image.tag
+     namespace=%k8s.ns.name pod=%k8s.pod.name)
+  priority: CRITICAL
+  tags: [aegis, privileged, mitre_privilege_escalation]
+
+- rule: Aegis — HostPath Mount Detected
+  desc: >
+    A container is accessing the host filesystem via a hostPath volume.
+    This can allow container escape.
+  condition: >
+    container and
+    ka.req.pod.volumes[*].hostpath.path != null and
+    not aegis_trusted_images
+  output: >
+    HostPath mount in container
+    (container=%container.name image=%container.image.repository
+     path=%ka.req.pod.volumes[0].hostpath.path)
+  priority: ERROR
+  tags: [aegis, hostpath, mitre_defense_evasion]
+
+- rule: Aegis — Crypto Miner Detected
+  desc: Known crypto-mining process names or arguments detected.
+  condition: >
+    spawned_process and container and
+    (proc.name in (xmrig, minergate, ethminer, cgminer, bfgminer) or
+     proc.cmdline contains "--mine" or
+     proc.cmdline contains "stratum+tcp")
+  output: >
+    Crypto miner detected
+    (container=%container.name image=%container.image.repository:%container.image.tag
+     proc=%proc.name cmdline=%proc.cmdline)
+  priority: CRITICAL
+  tags: [aegis, cryptomining, mitre_impact]

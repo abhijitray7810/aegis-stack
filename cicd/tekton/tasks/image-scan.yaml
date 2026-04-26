@@ -1,0 +1,48 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: trivy-image-scan
+  namespace: tekton-pipelines
+  labels:
+    app.kubernetes.io/part-of: aegis-cicd
+spec:
+  description: >
+    Scans a container image for OS and library vulnerabilities using Trivy.
+    Fails the pipeline if CRITICAL or HIGH CVEs are found.
+  params:
+    - name: IMAGE
+      type: string
+    - name: SEVERITY
+      type: string
+      default: "CRITICAL,HIGH"
+    - name: EXIT_CODE
+      type: string
+      default: "1"
+    - name: IGNORE_UNFIXED
+      type: string
+      default: "true"
+  results:
+    - name: scan-report
+      description: Path to JSON scan report
+  steps:
+    - name: trivy-scan
+      image: aquasec/trivy:0.48.3
+      env:
+        - name: TRIVY_NO_PROGRESS
+          value: "true"
+      args:
+        - image
+        - "--severity=$(params.SEVERITY)"
+        - "--exit-code=$(params.EXIT_CODE)"
+        - "--ignore-unfixed=$(params.IGNORE_UNFIXED)"
+        - "--format=json"
+        - "--output=/workspace/trivy-report.json"
+        - "$(params.IMAGE)"
+    - name: parse-results
+      image: stedolan/jq:latest
+      script: |
+        #!/bin/sh
+        C=$(jq '[.Results[].Vulnerabilities//[]|.[]|select(.Severity=="CRITICAL")]|length' /workspace/trivy-report.json)
+        H=$(jq '[.Results[].Vulnerabilities//[]|.[]|select(.Severity=="HIGH")]|length' /workspace/trivy-report.json)
+        echo "CRITICAL: $C  HIGH: $H"
+        echo "/workspace/trivy-report.json" > $(results.scan-report.path)

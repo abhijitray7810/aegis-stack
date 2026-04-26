@@ -1,0 +1,66 @@
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8sprivilegedcontainer
+  annotations:
+    description: >
+      Blocks creation of privileged containers.
+      Privileged containers share the host kernel and can escape container isolation.
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sPrivilegedContainer
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8sprivilegedcontainer
+
+        violation[{"msg": msg}] {
+          c := input_containers[_]
+          c.securityContext.privileged == true
+          msg := sprintf(
+            "Container '%v' must not run as privileged. Set securityContext.privileged=false.",
+            [c.name]
+          )
+        }
+
+        violation[{"msg": msg}] {
+          c := input_containers[_]
+          c.securityContext.allowPrivilegeEscalation == true
+          msg := sprintf(
+            "Container '%v' must not allow privilege escalation. Set allowPrivilegeEscalation=false.",
+            [c.name]
+          )
+        }
+
+        violation[{"msg": msg}] {
+          c := input_containers[_]
+          cap := c.securityContext.capabilities.add[_]
+          cap in {"NET_ADMIN", "SYS_ADMIN", "SYS_PTRACE", "SYS_MODULE", "SYS_RAWIO", "DAC_OVERRIDE"}
+          msg := sprintf(
+            "Container '%v' adds dangerous capability '%v'.", [c.name, cap]
+          )
+        }
+
+        input_containers[c] {
+          c := input.review.object.spec.containers[_]
+        }
+        input_containers[c] {
+          c := input.review.object.spec.initContainers[_]
+        }
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sPrivilegedContainer
+metadata:
+  name: deny-privileged-containers
+spec:
+  enforcementAction: deny
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Pod"]
+    excludedNamespaces:
+      - kube-system
+      - falco          # Falco's eBPF probe needs elevated access
+      - gatekeeper-system

@@ -1,0 +1,88 @@
+global:
+  enabled: true
+  tlsDisable: false
+
+injector:
+  enabled: true
+  replicas: 2
+  resources:
+    requests: { cpu: 50m, memory: 64Mi }
+    limits:   { cpu: 250m, memory: 128Mi }
+
+server:
+  enabled: true
+  image:
+    tag: "1.15.2"
+
+  resources:
+    requests: { cpu: 250m, memory: 256Mi }
+    limits:   { cpu: 500m, memory: 512Mi }
+
+  readinessProbe:
+    enabled: true
+    path: /v1/sys/health?standbyok=true&sealedcode=204&uninitcode=204
+
+  livenessProbe:
+    enabled: true
+    path: /v1/sys/health?standbyok=true
+    initialDelaySeconds: 60
+
+  auditStorage:
+    enabled: true
+    size: 10Gi
+
+  dataStorage:
+    enabled: true
+    size: 20Gi
+    storageClass: gp3
+
+  ha:
+    enabled: true
+    replicas: 3
+    raft:
+      enabled: true
+      setNodeId: true
+      config: |
+        ui = true
+
+        listener "tcp" {
+          tls_disable = 0
+          address     = "[::]:8200"
+          cluster_address = "[::]:8201"
+          tls_cert_file = "/vault/userconfig/vault-tls/tls.crt"
+          tls_key_file  = "/vault/userconfig/vault-tls/tls.key"
+          tls_client_ca_file = "/vault/userconfig/vault-tls/ca.crt"
+        }
+
+        storage "raft" {
+          path = "/vault/data"
+          retry_join {
+            leader_tls_servername = "vault-0.vault-internal"
+            leader_ca_cert_file   = "/vault/userconfig/vault-tls/ca.crt"
+          }
+          retry_join {
+            leader_tls_servername = "vault-1.vault-internal"
+            leader_ca_cert_file   = "/vault/userconfig/vault-tls/ca.crt"
+          }
+          retry_join {
+            leader_tls_servername = "vault-2.vault-internal"
+            leader_ca_cert_file   = "/vault/userconfig/vault-tls/ca.crt"
+          }
+        }
+
+        seal "awskms" {
+          region     = "us-east-1"
+          kms_key_id = "alias/aegis-production-vault"
+        }
+
+        service_registration "kubernetes" {}
+
+  serviceAccount:
+    create: true
+    name: vault
+    annotations:
+      eks.amazonaws.com/role-arn: ""  # set via Terraform output
+
+ui:
+  enabled: true
+  serviceType: ClusterIP

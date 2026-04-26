@@ -1,0 +1,59 @@
+---
+# Aegis Stack — Falco Configuration
+
+time_format_iso_8601: true
+priority: WARNING
+json_output: true
+json_include_output_property: true
+json_include_tags_property: true
+
+log_stderr: false
+log_syslog: false
+log_level: info
+
+libs_logger:
+  enabled: false
+
+output_timeout: 2000
+
+outputs:
+  rate: 100
+  max_burst: 1000
+
+syslog_output:
+  enabled: false
+
+file_output:
+  enabled: false
+
+stdout_output:
+  enabled: true
+
+# gRPC output for Falcosidekick
+grpc:
+  enabled: true
+  bind_address: "0.0.0.0:5060"
+  threadiness: 8
+
+grpc_output:
+  enabled: true
+
+# Buffered I/O to Falcosidekick
+http_output:
+  enabled: true
+  url: "http://falcosidekick:2801"
+  user_agent: "falcosecurity/falco"
+  insecure: true
+
+metadata_download:
+  max_mb: 100
+  chunk_wait_us: 1000
+  watch_freq_sec: 1
+
+syscall_event_drops:
+  threshold: 0.1
+  actions:
+    - log
+    - alert
+  rate: 0.03333
+  max_burst: 1

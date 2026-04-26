@@ -1,0 +1,35 @@
+aws_region      = "us-east-1"
+environment     = "production"
+cluster_name    = "aegis-production"
+cluster_version = "1.29"
+owner           = "platform-security"
+
+vpc_cidr             = "10.0.0.0/16"
+availability_zones   = ["us-east-1a", "us-east-1b", "us-east-1c"]
+private_subnet_cidrs = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
+public_subnet_cidrs  = ["10.0.101.0/24", "10.0.102.0/24", "10.0.103.0/24"]
+
+node_groups = {
+  system = {
+    instance_types = ["m5.xlarge"]
+    capacity_type  = "ON_DEMAND"
+    min_size       = 2
+    max_size       = 4
+    desired_size   = 2
+    labels         = { role = "system" }
+    taints         = []
+  }
+  workload = {
+    instance_types = ["m5.2xlarge"]
+    capacity_type  = "SPOT"
+    min_size       = 1
+    max_size       = 10
+    desired_size   = 3
+    labels         = { role = "workload" }
+    taints         = []
+  }
+}
+
+vault_version          = "0.27.0"
+grafana_admin_password = "CHANGE_ME_USE_SECRETS_MANAGER"
+slack_webhook_url      = "https://hooks.slack.com/services/XXX/YYY/ZZZ"

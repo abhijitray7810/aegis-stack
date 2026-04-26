@@ -1,0 +1,46 @@
+# Terraform
+**/.terraform/
+**/.terraform.lock.hcl
+*.tfplan
+*.tfstate
+*.tfstate.*
+terraform.tfvars
+!terraform.tfvars.example
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+crash.log
+crash.*.log
+
+# Vault
+vault/init-keys.json
+vault/*.json
+
+# Secrets
+*.pem
+*.key
+*.p12
+*.pfx
+.env
+.env.*
+secrets/
+kubeconfig
+*kubeconfig*
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Go
+tests/terratest/vendor/
+tests/terratest/*.test
+
+# Misc
+*.log
+/tmp/
+aegis-evidence/

@@ -1,0 +1,69 @@
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+metadata:
+  name: aegis-control-plane
+  namespace: istio-system
+spec:
+  profile: default
+  meshConfig:
+    # Enforce mTLS across the whole mesh
+    meshMTLS:
+      minProtocolVersion: TLSV1_3
+    defaultConfig:
+      holdApplicationUntilProxyStarts: true
+      proxyMetadata:
+        BOOTSTRAP_XDS_AGENT: "true"
+    # Access logging to stdout for Loki scraping
+    accessLogFile: /dev/stdout
+    accessLogEncoding: JSON
+    enableTracing: true
+    defaultProviders:
+      tracing:
+        - name: jaeger
+
+  components:
+    pilot:
+      k8s:
+        resources:
+          requests: { cpu: 200m, memory: 512Mi }
+          limits:   { cpu: 500m, memory: 1Gi }
+        hpaSpec:
+          minReplicas: 2
+          maxReplicas: 5
+    ingressGateways:
+      - name: istio-ingressgateway
+        enabled: true
+        k8s:
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits:   { cpu: 500m, memory: 512Mi }
+          hpaSpec:
+            minReplicas: 2
+            maxReplicas: 10
+          service:
+            type: LoadBalancer
+            ports:
+              - name: http2  { port: 80,  targetPort: 8080 }
+              - name: https  { port: 443, targetPort: 8443 }
+
+  values:
+    global:
+      mtls:
+        enabled: true
+      proxy:
+        resources:
+          requests: { cpu: 10m, memory: 40Mi }
+          limits:   { cpu: 200m, memory: 128Mi }
+    pilot:
+      env:
+        PILOT_ENABLE_WORKLOAD_ENTRY_AUTOREGISTRATION: true
+---
+# Enforce STRICT mTLS across all namespaces in the mesh
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default-mtls
+  namespace: istio-system
+spec:
+  mtls:
+    mode: STRICT

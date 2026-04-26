@@ -1,0 +1,114 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-security-context
+  annotations:
+    policies.kyverno.io/title: Require Security Context
+    policies.kyverno.io/category: Pod Security
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/subject: Pod, Container
+    policies.kyverno.io/description: >
+      All containers must declare a securityContext that:
+        - runs as a non-root user (runAsNonRoot: true)
+        - drops ALL capabilities
+        - has a read-only root filesystem
+        - disallows privilege escalation
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: require-run-as-non-root
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - falco
+                - gatekeeper-system
+                - kyverno
+      validate:
+        message: "Pods must set securityContext.runAsNonRoot=true."
+        pattern:
+          spec:
+            securityContext:
+              runAsNonRoot: true
+
+    - name: require-drop-all-capabilities
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - falco
+                - gatekeeper-system
+                - kyverno
+      validate:
+        message: "Container '{{ element.name }}' must drop ALL capabilities."
+        foreach:
+          - list: "request.object.spec.containers"
+            pattern:
+              securityContext:
+                capabilities:
+                  drop: ["ALL"]
+
+    - name: require-readonly-root-filesystem
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces:
+                - secure-apps
+      validate:
+        message: "Container '{{ element.name }}' must use a read-only root filesystem."
+        foreach:
+          - list: "request.object.spec.containers"
+            pattern:
+              securityContext:
+                readOnlyRootFilesystem: true
+
+    - name: disallow-privilege-escalation
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - falco
+                - gatekeeper-system
+                - kyverno
+      validate:
+        message: "Container '{{ element.name }}' must set allowPrivilegeEscalation=false."
+        foreach:
+          - list: "request.object.spec.containers"
+            pattern:
+              securityContext:
+                allowPrivilegeEscalation: false
+
+    - name: require-run-as-high-uid
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces:
+                - secure-apps
+      validate:
+        message: "Containers in secure-apps must run as UID >= 1000."
+        foreach:
+          - list: "request.object.spec.containers"
+            deny:
+              conditions:
+                any:
+                  - key: "{{ element.securityContext.runAsUser || `0` }}"
+                    operator: LessThan
+                    value: 1000

@@ -1,0 +1,77 @@
+# ── Deny all by default — explicit allow-list model ──────────────────────────
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: deny-all-default
+  namespace: secure-apps
+spec: {}   # empty spec = deny all
+
+---
+# ── Allow ingress gateway → secure-api ───────────────────────────────────────
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-ingress-to-secure-api
+  namespace: secure-apps
+spec:
+  selector:
+    matchLabels:
+      app: secure-api
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - "cluster.local/ns/istio-system/sa/istio-ingressgateway-service-account"
+      to:
+        - operation:
+            methods: ["GET", "POST", "PUT", "DELETE"]
+            ports: ["8080"]
+
+---
+# ── Allow Prometheus scraping ────────────────────────────────────────────────
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-prometheus-scrape
+  namespace: secure-apps
+spec:
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - "cluster.local/ns/monitoring/sa/prometheus"
+      to:
+        - operation:
+            methods: ["GET"]
+            paths: ["/metrics"]
+
+---
+# ── Allow Vault agent injector ────────────────────────────────────────────────
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-vault-injector
+  namespace: secure-apps
+spec:
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - "cluster.local/ns/vault/sa/vault"
+
+---
+# ── Deny all in monitoring namespace except internal ─────────────────────────
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-monitoring-internal
+  namespace: monitoring
+spec:
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            namespaces: ["monitoring", "istio-system", "argocd"]

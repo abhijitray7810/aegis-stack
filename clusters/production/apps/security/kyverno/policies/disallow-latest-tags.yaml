@@ -1,0 +1,59 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: disallow-latest-tag
+  annotations:
+    policies.kyverno.io/title: Disallow Latest Tag
+    policies.kyverno.io/category: Best Practices
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/description: >
+      The ':latest' tag is mutable and can cause unexpected behaviour.
+      All images must use an immutable tag (e.g. a SHA digest or semantic version).
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: require-image-tag
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - gatekeeper-system
+                - kyverno
+      validate:
+        message: "Image '{{ image }}' must specify a tag other than 'latest'."
+        foreach:
+          - list: "request.object.spec.containers"
+            deny:
+              conditions:
+                any:
+                  - key: "{{ element.image }}"
+                    operator: Equals
+                    value: "*:latest"
+                  - key: "{{ element.image }}"
+                    operator: NotContains
+                    value: ":"
+
+    - name: require-image-digest
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces:
+                - secure-apps
+      validate:
+        message: "Images in secure-apps namespace must be pinned to a SHA digest."
+        foreach:
+          - list: "request.object.spec.containers"
+            deny:
+              conditions:
+                all:
+                  - key: "{{ element.image }}"
+                    operator: NotContains
+                    value: "@sha256:"

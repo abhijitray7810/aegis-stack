@@ -1,0 +1,42 @@
+# Falcosidekick trigger definitions
+# These configure automated responses for specific rule firings.
+
+triggers:
+  - name: quarantine-on-shell-spawn
+    match:
+      rule: "Aegis — Shell Spawned in Container"
+      priority: CRITICAL
+    action:
+      type: webhook
+      url: "http://falco-remediation.falco.svc.cluster.local:8080/quarantine"
+      payload: |
+        {
+          "namespace": "{{ .OutputFields.k8s_ns_name }}",
+          "pod":       "{{ .OutputFields.k8s_pod_name }}",
+          "reason":    "shell-spawned-in-container",
+          "rule":      "{{ .Rule }}"
+        }
+
+  - name: quarantine-on-privileged
+    match:
+      rule: "Aegis — Privileged Container Started"
+      priority: CRITICAL
+    action:
+      type: webhook
+      url: "http://falco-remediation.falco.svc.cluster.local:8080/quarantine"
+      payload: |
+        {
+          "namespace": "{{ .OutputFields.k8s_ns_name }}",
+          "pod":       "{{ .OutputFields.k8s_pod_name }}",
+          "reason":    "privileged-container",
+          "rule":      "{{ .Rule }}"
+        }
+
+  - name: alert-on-crypto-miner
+    match:
+      rule: "Aegis — Crypto Miner Detected"
+      priority: CRITICAL
+    action:
+      type: slack
+      channel: "#security-critical"
+      message: ":rotating_light: *CRITICAL: Crypto miner detected* in `{{ .OutputFields.container_name }}` — auto-quarantine initiated."

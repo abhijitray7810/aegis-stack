@@ -1,0 +1,27 @@
+package main
+
+import future.keywords.in
+import data.lib.common
+
+deny[msg] {
+  input.kind in {"Pod", "Deployment", "StatefulSet", "DaemonSet"}
+  containers := common_containers(input)
+  container := containers[_]
+  tag := common.image_tag(container.image)
+  tag in {"latest", ""}
+  not common.is_system_namespace(input.metadata.namespace)
+  msg := sprintf(
+    "%s '%s/%s': container '%s' uses disallowed image tag '%s' — pin to a digest or semantic version",
+    [input.kind, input.metadata.namespace, input.metadata.name, container.name, tag]
+  )
+}
+
+common_containers(resource) := cs {
+  resource.kind == "Pod"
+  cs := resource.spec.containers
+}
+
+common_containers(resource) := cs {
+  resource.kind in {"Deployment", "StatefulSet", "DaemonSet"}
+  cs := resource.spec.template.spec.containers
+}

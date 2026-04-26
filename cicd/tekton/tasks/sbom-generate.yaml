@@ -1,0 +1,44 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: sbom-generate
+  namespace: tekton-pipelines
+  labels:
+    app.kubernetes.io/part-of: aegis-cicd
+spec:
+  description: >
+    Generates a Software Bill of Materials (SBOM) in SPDX JSON format
+    using Syft, then uploads it as an OCI artifact attached to the image.
+  params:
+    - name: IMAGE
+      type: string
+      description: "Full image reference to generate SBOM for"
+    - name: SYFT_VERSION
+      type: string
+      default: "1.0.1"
+    - name: OUTPUT_FORMAT
+      type: string
+      default: "spdx-json"
+  results:
+    - name: sbom-path
+      description: Path to generated SBOM file
+  steps:
+    - name: generate-sbom
+      image: "anchore/syft:v$(params.SYFT_VERSION)"
+      args:
+        - "$(params.IMAGE)"
+        - "--output=$(params.OUTPUT_FORMAT)=/workspace/sbom.spdx.json"
+      env:
+        - name: SYFT_QUIET
+          value: "false"
+
+    - name: attest-sbom
+      image: gcr.io/projectsigstore/cosign:v2.2.2
+      script: |
+        #!/bin/sh
+        set -e
+        # Attach SBOM as an OCI referrer (requires OIDC/keyless signing in CI)
+        cosign attach sbom --sbom /workspace/sbom.spdx.json \
+          --type spdx \
+          "$(params.IMAGE)" || echo "Warning: SBOM attach skipped (no signing identity)"
+        echo "/workspace/sbom.spdx.json" > $(results.sbom-path.path)

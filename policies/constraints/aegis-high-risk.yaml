@@ -1,0 +1,41 @@
+package main
+
+import future.keywords.in
+
+# Deny hostNetwork
+deny[msg] {
+  input.kind in {"Pod", "Deployment", "StatefulSet", "DaemonSet"}
+  pod_spec(input).hostNetwork == true
+  msg := sprintf("%s '%s/%s': hostNetwork must not be true", [input.kind, input.metadata.namespace, input.metadata.name])
+}
+
+# Deny hostPID
+deny[msg] {
+  input.kind in {"Pod", "Deployment", "StatefulSet", "DaemonSet"}
+  pod_spec(input).hostPID == true
+  msg := sprintf("%s '%s/%s': hostPID must not be true", [input.kind, input.metadata.namespace, input.metadata.name])
+}
+
+# Deny hostIPC
+deny[msg] {
+  input.kind in {"Pod", "Deployment", "StatefulSet", "DaemonSet"}
+  pod_spec(input).hostIPC == true
+  msg := sprintf("%s '%s/%s': hostIPC must not be true", [input.kind, input.metadata.namespace, input.metadata.name])
+}
+
+# Deny host path mounts
+deny[msg] {
+  input.kind in {"Pod", "Deployment", "StatefulSet", "DaemonSet"}
+  vol := pod_spec(input).volumes[_]
+  vol.hostPath
+  not is_exempt_namespace(input.metadata.namespace)
+  msg := sprintf(
+    "%s '%s/%s': hostPath volume '%s' is not allowed",
+    [input.kind, input.metadata.namespace, input.metadata.name, vol.name]
+  )
+}
+
+pod_spec(resource) := resource.spec { resource.kind == "Pod" }
+pod_spec(resource) := resource.spec.template.spec { resource.kind in {"Deployment", "StatefulSet", "DaemonSet"} }
+
+is_exempt_namespace(ns) { ns in {"kube-system", "falco"} }

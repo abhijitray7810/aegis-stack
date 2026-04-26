@@ -1,0 +1,59 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: aegis-security-pipeline
+  namespace: tekton-pipelines
+  labels:
+    app.kubernetes.io/part-of: aegis-cicd
+spec:
+  description: >
+    Full security pipeline: policy check -> image scan -> SBOM generation -> image signing.
+  params:
+    - name: IMAGE
+      type: string
+    - name: IMAGE_DIGEST
+      type: string
+    - name: SEVERITY_THRESHOLD
+      type: string
+      default: "CRITICAL,HIGH"
+  workspaces:
+    - name: source
+    - name: pipeline-cache
+  results:
+    - name: scan-report
+      value: $(tasks.scan-image.results.scan-report)
+    - name: sbom-path
+      value: $(tasks.generate-sbom.results.sbom-path)
+  tasks:
+    - name: policy-check
+      taskRef:
+        name: policy-check
+      workspaces:
+        - name: source
+          workspace: source
+
+    - name: scan-image
+      taskRef:
+        name: trivy-image-scan
+      runAfter: [policy-check]
+      params:
+        - name: IMAGE
+          value: $(params.IMAGE)
+        - name: SEVERITY
+          value: $(params.SEVERITY_THRESHOLD)
+
+    - name: generate-sbom
+      taskRef:
+        name: sbom-generate
+      runAfter: [policy-check]
+      params:
+        - name: IMAGE
+          value: $(params.IMAGE)
+
+    - name: sign-image
+      taskRef:
+        name: sign-image
+      runAfter: [scan-image, generate-sbom]
+      params:
+        - name: IMAGE
+          value: $(params.IMAGE_DIGEST)

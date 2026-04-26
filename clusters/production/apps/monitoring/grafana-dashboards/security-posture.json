@@ -1,0 +1,111 @@
+{
+  "title": "Aegis — Security Posture",
+  "uid": "aegis-posture",
+  "schemaVersion": 36,
+  "version": 1,
+  "refresh": "1m",
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Policy Violations (Gatekeeper)",
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "sum(gatekeeper_violations)",
+          "legendFormat": "Violations"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "steps": [
+            { "color": "green", "value": null },
+            { "color": "orange", "value": 1 },
+            { "color": "red", "value": 10 }
+          ]}
+        }
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Kyverno Policy Failures",
+      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "sum(kyverno_policy_results_total{rule_result=\"fail\"})",
+          "legendFormat": "Failures"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Vault Unseal Status",
+      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 4 },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "vault_core_unsealed",
+          "legendFormat": "Unsealed"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "mTLS Coverage (%)",
+      "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "100 * sum(istio_requests_total{connection_security_policy=\"mutual_tls\"}) / sum(istio_requests_total)",
+          "legendFormat": "mTLS %"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Gatekeeper Violations Over Time",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "sum by (constraint_kind) (gatekeeper_violations)",
+          "legendFormat": "{{constraint_kind}}"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Istio Request Rate (mTLS vs plaintext)",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "sum by (connection_security_policy) (rate(istio_requests_total[5m]))",
+          "legendFormat": "{{connection_security_policy}}"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "table",
+      "title": "Expiring Certificates (next 30d)",
+      "gridPos": { "x": 0, "y": 12, "w": 24, "h": 6 },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "certmanager_certificate_expiration_timestamp_seconds - time() < 86400 * 30",
+          "legendFormat": "{{namespace}}/{{name}}",
+          "instant": true
+        }
+      ]
+    }
+  ]
+}

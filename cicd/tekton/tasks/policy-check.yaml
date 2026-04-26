@@ -1,0 +1,46 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: policy-check
+  namespace: tekton-pipelines
+  labels:
+    app.kubernetes.io/part-of: aegis-cicd
+spec:
+  description: >
+    Validates Kubernetes manifests and Terraform plans against OPA/Conftest
+    policies. Fails the pipeline on any policy violation.
+  params:
+    - name: MANIFESTS_PATH
+      type: string
+      default: "clusters/"
+      description: "Path to Kubernetes manifests to validate"
+    - name: POLICY_PATH
+      type: string
+      default: "policies/"
+      description: "Path to OPA/Rego policy files"
+    - name: CONFTEST_VERSION
+      type: string
+      default: "0.47.0"
+  workspaces:
+    - name: source
+      description: Source code workspace
+  steps:
+    - name: conftest-k8s
+      image: "openpolicyagent/conftest:v$(params.CONFTEST_VERSION)"
+      workingDir: $(workspaces.source.path)
+      args:
+        - test
+        - "$(params.MANIFESTS_PATH)"
+        - "--policy=$(params.POLICY_PATH)"
+        - "--all-namespaces"
+        - "--output=table"
+        - "--fail-on-warn"
+
+    - name: conftest-terraform
+      image: "openpolicyagent/conftest:v$(params.CONFTEST_VERSION)"
+      workingDir: $(workspaces.source.path)
+      args:
+        - test
+        - "infrastructure/"
+        - "--policy=infrastructure/policies/"
+        - "--output=table"

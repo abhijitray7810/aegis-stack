@@ -1,0 +1,90 @@
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8sdisallowedtags
+  annotations:
+    description: >
+      Requires container images to have an explicit, non-'latest' image tag.
+      Ensures reproducible deployments and prevents unintended image updates.
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sDisallowedTags
+      validation:
+        openAPIV3Schema:
+          type: object
+          properties:
+            tags:
+              type: array
+              items:
+                type: string
+              description: Disallowed image tags (default ['latest']).
+            exemptImages:
+              type: array
+              items:
+                type: string
+              description: Image prefixes exempt from this policy.
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8sdisallowedtags
+
+        import future.keywords.in
+
+        violation[{"msg": msg}] {
+          container := input_containers[_]
+          tag := image_tag(container.image)
+          tag in input.parameters.tags
+          not is_exempt(container.image)
+          msg := sprintf(
+            "Container '%v' uses disallowed image tag '%v'. Pin to a specific digest or semantic version.",
+            [container.name, tag]
+          )
+        }
+
+        image_tag(image) := tag {
+          parts := split(image, ":")
+          count(parts) == 2
+          tag := parts[1]
+        }
+
+        image_tag(image) := "latest" {
+          not contains(image, ":")
+        }
+
+        is_exempt(image) {
+          exempt := input.parameters.exemptImages[_]
+          startswith(image, exempt)
+        }
+
+        input_containers[c] {
+          c := input.review.object.spec.containers[_]
+        }
+        input_containers[c] {
+          c := input.review.object.spec.initContainers[_]
+        }
+        input_containers[c] {
+          c := input.review.object.spec.ephemeralContainers[_]
+        }
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sDisallowedTags
+metadata:
+  name: deny-latest-tag
+spec:
+  enforcementAction: deny
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Pod"]
+    excludedNamespaces:
+      - kube-system
+      - gatekeeper-system
+      - kyverno
+  parameters:
+    tags:
+      - latest
+      - ""
+    exemptImages:
+      - "602401143452.dkr.ecr.us-east-1.amazonaws.com/eks"

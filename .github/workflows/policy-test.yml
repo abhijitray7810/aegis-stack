@@ -1,0 +1,100 @@
+name: OPA Policy Validation
+
+on:
+  push:
+    paths:
+      - "policies/**"
+      - "infrastructure/policies/**"
+      - "clusters/**"
+  pull_request:
+    paths:
+      - "policies/**"
+      - "infrastructure/policies/**"
+      - "clusters/**"
+
+jobs:
+  opa-policy-tests:
+    name: OPA Unit Tests
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install OPA
+        run: |
+          curl -sL -o /usr/local/bin/opa \
+            https://openpolicyagent.org/downloads/latest/opa_linux_amd64_static
+          chmod +x /usr/local/bin/opa
+
+      - name: OPA format check
+        run: |
+          opa fmt --fail $(find policies/ infrastructure/policies/ -name '*.rego')
+
+      - name: OPA unit tests
+        run: |
+          opa test policies/ infrastructure/policies/ -v --coverage \
+            | tee opa-coverage.txt
+
+      - name: Check coverage threshold (>= 80%)
+        run: |
+          COVERAGE=$(grep -oP '\d+\.\d+(?=%)' opa-coverage.txt | tail -1)
+          echo "OPA policy coverage: ${COVERAGE}%"
+          awk -v cov="$COVERAGE" 'BEGIN { if (cov+0 < 80) { print "FAIL: coverage below 80%"; exit 1 } else print "PASS" }'
+
+  conftest-k8s:
+    name: Conftest Kubernetes Manifests
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Conftest
+        run: |
+          VERSION="0.47.0"
+          curl -sL "https://github.com/open-policy-agent/conftest/releases/download/v${VERSION}/conftest_${VERSION}_Linux_x86_64.tar.gz" \
+            | tar -xz conftest
+          sudo mv conftest /usr/local/bin/
+
+      - name: Test cluster manifests
+        run: |
+          conftest test clusters/ \
+            --policy policies/ \
+            --all-namespaces \
+            --output json \
+            | tee conftest-results.json
+
+          FAILURES=$(jq '[.[] | select(.failures | length > 0)] | length' conftest-results.json)
+          echo "Policy failures: $FAILURES"
+          [ "$FAILURES" -eq 0 ] || exit 1
+
+      - name: Upload Conftest results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: conftest-results
+          path: conftest-results.json
+
+  terraform-policy:
+    name: Terraform Policy Check
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.6.6"
+
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive infrastructure/
+
+      - name: Install Conftest
+        run: |
+          VERSION="0.47.0"
+          curl -sL "https://github.com/open-policy-agent/conftest/releases/download/v${VERSION}/conftest_${VERSION}_Linux_x86_64.tar.gz" \
+            | tar -xz conftest
+          sudo mv conftest /usr/local/bin/
+
+      - name: Conftest Terraform policies
+        run: |
+          conftest test infrastructure/ \
+            --policy infrastructure/policies/ \
+            --output table

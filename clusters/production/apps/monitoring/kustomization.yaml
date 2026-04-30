@@ -4,7 +4,7 @@ namespace: monitoring
 resources: []
 configMapGenerator:
   - name: grafana-dashboards-falco
-    files:
+    files: 
       - grafana-dashboards/falco-dashboard.json
   - name: grafana-dashboards-posture
     files: 

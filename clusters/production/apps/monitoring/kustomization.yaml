@@ -7,5 +7,5 @@ configMapGenerator:
     files:
       - grafana-dashboards/falco-dashboard.json
   - name: grafana-dashboards-posture
-    files:
+    files: 
       - grafana-dashboards/security-posture.json

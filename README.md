@@ -1,6 +1,4 @@
 # Conftest 
-## Part-1 Image
-![image](https://github.com/abhijitray7810/aegis-stack/blob/6111099770a57407d59d58338fb7d42c2bcccc46/image/Part-1/Screenshot%202026-06-05%20142605.png)
 [![Go Report Card](https://goreportcard.com/badge/open-policy-agent/opa)](https://goreportcard.com/report/open-policy-agent/conftest) [![Netlify](https://api.netlify.com/api/v1/badges/2d928746-3380-4123-b0eb-1fd74ba390db/deploy-status)](https://app.netlify.com/sites/vibrant-villani-65041c/deploys)
 
 Conftest helps you write tests against structured configuration data. Using Conftest you can
@@ -10,7 +8,8 @@ Serverless configs or any other config files.
 Conftest uses the Rego language from [Open Policy Agent](https://www.openpolicyagent.org/) for writing
 the assertions. You can read more about Rego in [How do I write policies](https://www.openpolicyagent.org/docs/how-do-i-write-policies.html)
 in the Open Policy Agent documentation.
-
+## Part-1 Image
+![image](https://github.com/abhijitray7810/aegis-stack/blob/6111099770a57407d59d58338fb7d42c2bcccc46/image/Part-1/Screenshot%202026-06-05%20142605.png)
 Here's a quick example. Save the following as `policy/deployment.rego`:
 
 ```rego

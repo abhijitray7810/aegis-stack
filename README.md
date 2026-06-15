@@ -41,7 +41,7 @@ FAIL - deployment.yaml - Containers must provide app label for pod selectors
 ```
 
 Conftest isn't specific to Kubernetes. It will happily let you write tests for any configuration files in a variety of different formats. See the [documentation](https://www.conftest.dev/) for [installation instructions](https://www.conftest.dev/install/) and
-more details about the features.
+more details about the features. 
 
 ## Want to contribute to Conftest?
 

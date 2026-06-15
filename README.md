@@ -12,7 +12,7 @@ in the Open Policy Agent documentation.
 ![image](https://github.com/abhijitray7810/aegis-stack/blob/6111099770a57407d59d58338fb7d42c2bcccc46/image/Part-1/Screenshot%202026-06-05%20142605.png)
 Here's a quick example. Save the following as `policy/deployment.rego`:
 
-```rego
+```rego 
 package main
  
 deny[msg] {

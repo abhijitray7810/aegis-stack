@@ -8,7 +8,7 @@ Serverless configs or any other config files.
 Conftest uses the Rego language from [Open Policy Agent](https://www.openpolicyagent.org/) for writing
 the assertions. You can read more about Rego in [How do I write policies](https://www.openpolicyagent.org/docs/how-do-i-write-policies.html)
 in the Open Policy Agent documentation.
-## Part-1 Image 
+## Part-1 Image  
 ![image](https://github.com/abhijitray7810/aegis-stack/blob/6111099770a57407d59d58338fb7d42c2bcccc46/image/Part-1/Screenshot%202026-06-05%20142605.png)
 Here's a quick example. Save the following as `policy/deployment.rego`: 
 

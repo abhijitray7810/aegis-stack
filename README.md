@@ -14,7 +14,7 @@ Here's a quick example. Save the following as `policy/deployment.rego`:
 
 ```rego  
 package main
-  
+   
 deny[msg] {  
   input.kind == "Deployment"
   not input.spec.template.spec.securityContext.runAsNonRoot
